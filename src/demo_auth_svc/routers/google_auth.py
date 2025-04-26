@@ -7,6 +7,8 @@ from urllib.parse import urlencode
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import RedirectResponse
 
+import jwt_module  # Assumed to exist and provide a create_token function
+
 router = APIRouter()
 
 @router.get("/auth/google/signup")
@@ -54,7 +56,7 @@ async def google_login():
         raise HTTPException(status_code=500, detail="Failed to generate Google OAuth URL.")
 
 @router.get("/auth/google/callback")
-async def google_callback(code: Optional[str] = None, error: Optional[str] = None):
+async def google_callback(code: Optional[str] = None, error: Optional[str] = None, state: Optional[str] = None):
     if error:
         logging.error(f"Error during Google OAuth callback: {error}")
         raise HTTPException(status_code=400, detail=f"Google OAuth error: {error}")
@@ -82,7 +84,15 @@ async def google_callback(code: Optional[str] = None, error: Optional[str] = Non
             "name": token_data.get("name"),
             "profile_picture": token_data.get("picture")
         }
-        return user_data
+        if state == "login":
+            try:
+                jwt_token = jwt_module.create_token(user_data)
+                return {"token": jwt_token}
+            except Exception as jwt_err:
+                logging.error(jwt_err, exc_info=True)
+                raise HTTPException(status_code=500, detail="Failed to generate JWT token.")
+        else:
+            return user_data
     except httpx.HTTPStatusError as http_err:
         logging.error(http_err, exc_info=True)
         raise HTTPException(status_code=http_err.response.status_code, detail="Token exchange failed with Google.")

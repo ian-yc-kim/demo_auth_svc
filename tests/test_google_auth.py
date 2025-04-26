@@ -3,8 +3,8 @@ import json
 import httpx
 import pytest
 from fastapi import HTTPException
-
 from urllib.parse import urlparse, parse_qs
+
 
 def test_signup_redirect(client, monkeypatch):
     # Setup environment variables
@@ -99,3 +99,29 @@ def test_callback_error(client):
     assert response.status_code == 400
     data = response.json()
     assert "Google OAuth error" in data["detail"]
+
+
+def test_callback_login_success(client, monkeypatch):
+    # Setup environment variables
+    monkeypatch.setenv("CLIENT_ID", "test_client_id")
+    monkeypatch.setenv("CLIENT_SECRET", "test_client_secret")
+    monkeypatch.setenv("REDIRECT_URI", "http://localhost/callback")
+
+    # Monkey patch httpx.post to simulate successful token exchange
+    monkeypatch.setattr(httpx, "post", fake_httpx_post_success)
+
+    # Patch the jwt_module in the google_auth router to simulate JWT token generation
+    import demo_auth_svc.routers.google_auth as google_auth
+
+    class FakeJWTModule:
+        @staticmethod
+        def create_token(user_data):
+            return "fake-jwt-token"
+
+    monkeypatch.setattr(google_auth, "jwt_module", FakeJWTModule)
+
+    response = client.get("/auth/google/callback", params={"code": "valid_code", "state": "login"})
+    assert response.status_code == 200
+    data = response.json()
+    assert "token" in data
+    assert data["token"] == "fake-jwt-token"
