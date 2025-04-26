@@ -31,6 +31,28 @@ async def google_signup():
         logging.error(e, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to generate Google OAuth URL.")
 
+@router.get("/auth/google/login")
+async def google_login():
+    try:
+        client_id = os.getenv("CLIENT_ID")
+        redirect_uri = os.getenv("REDIRECT_URI")
+        state = "login"
+        if not client_id or not redirect_uri:
+            raise HTTPException(status_code=500, detail="OAuth configuration is missing.")
+        google_auth_url = "https://accounts.google.com/o/oauth2/v2/auth"
+        query_params = {
+            "response_type": "code",
+            "scope": "openid email profile",
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "state": state
+        }
+        url = f"{google_auth_url}?{urlencode(query_params)}"
+        return RedirectResponse(url, status_code=302)
+    except Exception as e:
+        logging.error(e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to generate Google OAuth URL.")
+
 @router.get("/auth/google/callback")
 async def google_callback(code: Optional[str] = None, error: Optional[str] = None):
     if error:

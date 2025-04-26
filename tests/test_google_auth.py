@@ -4,13 +4,14 @@ import httpx
 import pytest
 from fastapi import HTTPException
 
+from urllib.parse import urlparse, parse_qs
 
 def test_signup_redirect(client, monkeypatch):
     # Setup environment variables
     monkeypatch.setenv("CLIENT_ID", "test_client_id")
     monkeypatch.setenv("REDIRECT_URI", "http://localhost/callback")
     
-    # Using 'follow_redirects' instead of 'allow_redirects' because TestClient does not accept 'allow_redirects'
+    # Using 'follow_redirects' due to behavior of TestClient
     response = client.get("/auth/google/signup", follow_redirects=False)
     
     # Verify redirection status code
@@ -22,7 +23,6 @@ def test_signup_redirect(client, monkeypatch):
     assert location.startswith("https://accounts.google.com/o/oauth2/v2/auth")
     
     # Check that necessary query parameters exist in the URL
-    from urllib.parse import urlparse, parse_qs
     url_parts = urlparse(location)
     query_params = parse_qs(url_parts.query)
     assert query_params.get("response_type") == ["code"]
@@ -30,6 +30,30 @@ def test_signup_redirect(client, monkeypatch):
     assert query_params.get("client_id") == ["test_client_id"]
     assert query_params.get("redirect_uri") == ["http://localhost/callback"]
     assert query_params.get("state") == ["signup"]
+
+
+def test_login_redirect(client, monkeypatch):
+    # Setup environment variables for login endpoint
+    monkeypatch.setenv("CLIENT_ID", "test_client_id")
+    monkeypatch.setenv("REDIRECT_URI", "http://localhost/callback")
+
+    response = client.get("/auth/google/login", follow_redirects=False)
+    
+    # Verify redirection status code is 302
+    assert response.status_code == 302
+    
+    # Verify that redirection URL is correct and includes state=login
+    location = response.headers.get("location")
+    assert location is not None
+    assert location.startswith("https://accounts.google.com/o/oauth2/v2/auth")
+    
+    url_parts = urlparse(location)
+    query_params = parse_qs(url_parts.query)
+    assert query_params.get("response_type") == ["code"]
+    assert query_params.get("scope") == ["openid email profile"]
+    assert query_params.get("client_id") == ["test_client_id"]
+    assert query_params.get("redirect_uri") == ["http://localhost/callback"]
+    assert query_params.get("state") == ["login"]
 
 
 def fake_httpx_post_success(url, data):
